@@ -1,0 +1,200 @@
+<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initialstate="IDLE">
+
+	<state id="IDLE">
+		<transition event="msg.start" target="BODY" />
+	</state>
+
+	<state id="BODY">
+		<transition event="msg.end" target="Main_END" />
+		<transition event="BODY.done" target="Main_END" />
+		<transition event="service.*" target="CLOSING">
+			<send target="'Charging'" targettype="'service'" event="'msg.end'" namelist="cause timerId endpoint" />
+		</transition>
+		<transition event="msg.*" priority="2" target="CLOSING">
+			<send target="'Charging'" targettype="'service'" event="'msg.end'" namelist="cause timerId endpoint" />
+		</transition>
+		<transition event="error.*" target="CLOSING">
+			<send target="'Charging'" targettype="'service'" event="'msg.end'" namelist="cause timerId endpoint" />
+		</transition>
+		<initial>
+			<transition target="ReceivingMessage" />
+		</initial>
+
+		<state id="ReceivingMessage">
+			<transition event="service.continue" target="RequestingSRISM" cond="getApplicationData('ROUTING',String.class)=='MAP'">
+				<send target="'SendSriSm'" targettype="'service'" event="'msg.start'" arglist="cause" />
+			</transition>
+			<transition event="service.continue" target="RequestingSMPPDelivery" cond="getApplicationData('ROUTING',String.class)=='ESME'">
+				<send target="'SendDeliverSm'" targettype="'service'" event="'msg.start'" arglist="cause" />
+			</transition>
+			<transition event="service.accept" target="SendingAckToNet" />
+			<transition event="service.leave" target="SendingRelayToNet" data="event" />
+			<onentry>
+				<send target="'ProcessMoFsm'" targettype="'service'" data="event" />
+			</onentry>
+		</state>
+
+		<state id="SendingAckToNet">
+			<transition event="service.continue" target="RequestingSRISM" cond="getApplicationData('ROUTING',String.class)=='MAP'">
+				<send target="'SendSriSm'" targettype="'service'" event="'msg.start'" arglist="cause" />
+			</transition>
+			<transition event="service.continue" target="RequestingSMPPDelivery" cond="getApplicationData('ROUTING',String.class)=='ESME'">
+				<send target="'SendDeliverSm'" targettype="'service'" event="'msg.start'" arglist="cause" />
+			</transition>
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+		<state id="SendingRelayToNet">
+			<transition target="BODY_END" />
+			<onentry>
+				<send target="'net'" targettype="'network'" data="event" />
+			</onentry>
+		</state>
+
+		<!-- MAP -->
+		<state id="RequestingSRISM">
+			<transition event="service.continue" target="RequestingSMPPDelivery" cond="getApplicationData('ROUTING',String.class)=='ESME'">
+				<send target="'SendDeliverSm'" targettype="'service'" event="'msg.start'" arglist="cause" />
+			</transition>
+			<transition event="service.continue" priority="2" target="RequestingMAPDelivery">
+				<send target="'SendMtFsm'" targettype="'service'" event="'msg.start'" arglist="cause" />
+			</transition>
+			<transition event="service.presence" target="SRIRequestingPresence" />
+			<transition event="service.hold" target="SRIRequestingStorage" />
+			<transition event="service.route" target="RequestingNetworkRouting" />
+		</state>
+
+		<state id="RequestingNetworkRouting">
+			<transition event="msg.route" target="RequestingSRISM">
+				<send target="'SendSriSm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+
+		<state id="SRIRequestingPresence">
+			<transition event="service.hold" target="SRIRequestingStorage" />
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+
+		<state id="SRIRequestingStorage">
+			<transition event="msg.start" target="RequestingSRISM">
+				<send target="'SendSriSm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<transition event="msg.presence" target="RequestingSRISM">
+				<send target="'SendSriSm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<onentry>
+				<send target="'net'" targettype="'network'" data="event" />
+			</onentry>
+		</state>
+
+		<state id="RequestingMAPDelivery">
+			<transition event="service.continue" target="RequestingSRISM" cond="getApplicationData('ROUTING',String.class)=='SRI'">
+				<send target="'SendSriSm'" targettype="'service'" event="'msg.start'" arglist="cause.NONE" />
+			</transition>
+			<transition event="service.continue" target="RequestingSMPPDelivery" cond="getApplicationData('ROUTING',String.class)=='ESME'">
+				<send target="'SendDeliverSm'" targettype="'service'" event="'msg.start'" arglist="cause.NONE" />
+			</transition>
+			<transition event="service.continue" priority="2" target="RequestingNetMAPDelivery" />
+			<transition event="service.presence" target="MTRequestingPresence" />
+			<transition event="service.hold" target="MTRequestingStorage" />
+		</state>
+
+		<state id="MTRequestingPresence">
+			<transition event="service.hold" target="MTRequestingStorage" />
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+
+		<state id="MTRequestingStorage">
+			<transition event="msg.start" target="RequestingMAPDelivery">
+				<send target="'SendMtFsm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<transition event="msg.presence" target="RequestingMAPDelivery">
+				<send target="'SendMtFsm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<onentry>
+				<send target="'net'" targettype="'network'" data="event" />
+			</onentry>
+		</state>
+
+		<state id="RequestingNetMAPDelivery">
+			<transition event="msg.start" target="RequestingMAPDelivery">
+				<send target="'SendMtFsm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<transition event="msg.end" target="RequestingCharging" />
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+
+		<state id="RequestingCharging">
+			<transition target="BODY_END" />
+			<onentry>
+				<send target="'Charging'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+				<send target="'*'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+
+		<!-- SMPP -->
+		<state id="RequestingSMPPDelivery">
+			<transition event="service.continue" target="RequestingSRISM" cond="getApplicationData('ROUTING',String.class)=='MAP'">
+				<send target="'SendSriSm'" targettype="'service'" event="'msg.start'" arglist="cause" />
+			</transition>
+			<transition event="service.continue" priority="2" target="RequestingNetSMPPDelivery" />
+			<transition event="service.presence" target="RequestingSMPPPresence" />
+			<transition event="service.hold" target="RequestingSMPPMsgStorage" />
+		</state>
+
+		<state id="RequestingSMPPPresence">
+			<transition event="msg.presence" target="RequestingSMPPDelivery">
+				<send target="'SendDeliverSm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<transition event="service.hold" target="RequestingSMPPMsgStorage" />
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+
+		<state id="RequestingSMPPMsgStorage">
+			<transition event="msg.start" target="RequestingSMPPDelivery">
+				<send target="'SendDeliverSm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<transition event="msg.presence" target="RequestingSMPPDelivery">
+				<send target="'SendDeliverSm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<onentry>
+				<send target="'net'" targettype="'network'" data="event" />
+			</onentry>
+		</state>
+
+		<state id="RequestingNetSMPPDelivery">
+			<transition event="msg.start" target="RequestingSMPPDelivery">
+				<send target="'SendDeliverSm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<transition event="msg.end" target="RequestingCharging" />
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
+
+		<state id="BODY_END" final="true">
+			<transition target="Main_END" />
+		</state>
+	</state>
+
+	<state id="CLOSING">
+		<transition target="Main_END" />
+		<onentry>
+			<send target="'net'" targettype="'network'" event="'service.abort'" arglist="cause" />
+		</onentry>
+	</state>
+
+	<state id="Main_END" final="true" />
+</scxml>
