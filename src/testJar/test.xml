@@ -133,6 +133,15 @@
 				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
 			</onentry>
 		</state>
+		<state id="RequestingNetMAPDelivery">
+			<transition event="msg.start" target="RequestingMAPDelivery">
+				<send target="'SendMtFsm'" targettype="'service'" event="_event.name" namelist="cause timerId endpoint" />
+			</transition>
+			<transition event="msg.end" target="RequestingCharging" />
+			<onentry>
+				<send target="'net'" targettype="'network'" event="_event.name" namelist="cause timerId endpoint" />
+			</onentry>
+		</state>
 
 		<state id="RequestingCharging">
 			<transition target="BODY_END" />
